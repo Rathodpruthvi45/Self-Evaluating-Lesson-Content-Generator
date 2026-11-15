@@ -1,0 +1,22 @@
+
+[project]
+name = "agentic-lesson-generator"
+version = "0.1.0"
+description = "Self-Evolving Agentic Lesson Generator"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain",
+    "langchain-google-genai",
+    "langgraph",
+    "pydantic",
+    "python-dotenv",
+    "streamlit",
+    "fastapi",
+    "uvicorn",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
