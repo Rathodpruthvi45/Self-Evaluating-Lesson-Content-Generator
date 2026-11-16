@@ -1,13 +1,21 @@
-from app.agents.lesson_generator import LessonGenerator
 
+from app.graph.workflow import LessonWorkflow
+import uuid
+
+from app.database.repository import MemoryRepository
 from app.evaluator.topic_rubric import TopicRubricGenerator
+from app.evaluator.rubric import UNIVERSAL_RUBRIC
 
-from app.evaluator.evaluator import LessonEvaluator
-
-from app.evaluator.rubric import UNIVERSAL_RUBRIC, calculate_final_status
+from app.schemas.rejection import RejectionLog
 
 
 def main():
+
+    run_id = str(uuid.uuid4())
+
+    # Initialize persistent memory
+
+   
 
     topic = input("Enter topic: ").strip()
 
@@ -17,65 +25,111 @@ def main():
 
     level = "Beginner"
 
-    # STEP 1: Generate topic-specific rubric
+    # STEP 1: Generate topic rubric
 
     print("\nGenerating topic-specific rubric...")
 
     rubric_generator = TopicRubricGenerator()
 
-    topic_rubric = rubric_generator.generate(topic=topic, level=level)
-
-    # STEP 2: Combine both rubrics
-
-    combined_rubric = UNIVERSAL_RUBRIC + [
-        item.model_dump() for item in topic_rubric.criteria
-    ]
-
-    print("\nLearning checkpoints:")
-
-    for item in combined_rubric:
-        print(item["id"], "-", item["criterion"])
-
-    # STEP 3: Generate lesson
-
-    print("\nGenerating lesson...")
-
-    generator = LessonGenerator()
-
-    lesson = generator.generate(topic=topic, level=level, rubric=combined_rubric)
-
-    print("\nGENERATED LESSON")
-    print("=" * 60)
-    print(lesson)
-
-    # STEP 4: Evaluate lesson
-
-    print("\nEvaluating lesson...")
-
-    evaluator = LessonEvaluator()
-
-    evaluation = evaluator.evaluate(
+    topic_rubric_result = rubric_generator.generate(
         topic=topic,
-        lesson=lesson,
-        universal_rubric=UNIVERSAL_RUBRIC,
-        topic_rubric=[item.model_dump() for item in topic_rubric.criteria],
+        level=level
     )
 
-    # STEP 5: Calculate final status
+    topic_rubric = [
+        item.model_dump()
+        for item in topic_rubric_result.criteria
+    ]
 
-    final_status = calculate_final_status(evaluation.results)
+    # STEP 2: Combine rubrics
 
-    print("\nEVALUATION RESULTS")
+    combined_rubric = UNIVERSAL_RUBRIC + topic_rubric
+
+    memory = MemoryRepository()
+    
+        # Save initial request
+    
+    memory.create_run(
+        run_id=run_id,
+        topic=topic,
+        level=level,
+        rubric=combined_rubric
+    )
+
+    # STEP 3: Create initial state
+
+    initial_state = {
+
+        "topic": topic,
+        "level": level,
+        "run_id": run_id,
+        "rubric": combined_rubric,
+
+        "universal_rubric": UNIVERSAL_RUBRIC,
+
+        "topic_rubric": topic_rubric,
+
+        "lesson": "",
+
+        "evaluation_results": [],
+
+        "final_status": "",
+
+        "attempt": 0,
+
+        "max_retries": 2,
+
+        "rejection_log": RejectionLog(
+            topic=topic
+        ).model_dump()
+
+    }
+
+    # STEP 4: Build workflow
+
+    workflow_builder = LessonWorkflow()
+
+    workflow = workflow_builder.build()
+
+    # STEP 5: Execute workflow
+
+    print("\nStarting LangGraph workflow...")
+
+    result = workflow.invoke(initial_state)
+
+
+    memory.finish_run(
+    run_id=run_id,
+    final_status=result["final_status"],
+    total_attempts=result["attempt"],
+    final_lesson=result["lesson"],
+    rejection_log=result["rejection_log"]
+)
+
+    print("\nMemory successfully saved to SQLite.")
+
+    # STEP 6: Display final result
+
+    print("\n" + "=" * 60)
+    print("FINAL LESSON")
     print("=" * 60)
 
-    for item in evaluation.results:
+    print(result["lesson"])
 
-        print("\nCriterion:", item.criterion)
-        print("Status:", item.status)
-        print("Reason:", item.reason)
-        print("Evidence:", item.evidence)
+    print("\nFINAL STATUS:", result["final_status"])
 
-    print("\nFINAL STATUS:", final_status)
+    print("\nTOTAL ATTEMPTS:", result["attempt"])
+
+    # STEP 7: Display rejection history
+
+    print("\nREJECTION LOG")
+    print("=" * 60)
+
+    for entry in result["rejection_log"]["entries"]:
+
+        print("\nAttempt:", entry["attempt"])
+        print("Criterion:", entry["criterion"])
+        print("Reason:", entry["reason"])
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -10,32 +11,36 @@ class LessonGenerator:
 
         self.llm = get_gemini_client()
 
-        self.prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """
+        self.prompt = ChatPromptTemplate.from_messages([
+
+            (
+                "system",
+                """
                 You are an expert technical teacher.
 
-                Your responsibility is to teach students
-                who have absolutely no background knowledge.
+                Teach students who have absolutely no background
+                knowledge.
 
-                Teaching rules:
+                Rules:
 
                 1. Use simple English.
                 2. Explain technical terminology.
                 3. Teach concepts step by step.
-                4. Use practical examples.
+                4. Include practical examples.
                 5. Never assume prior knowledge.
-                6. Avoid unnecessary complexity.
-                7. Cover every supplied learning checkpoint.
-                8. Do not simply list concepts. Explain them.
-                9. Ensure the lesson is factually accurate.
-                """,
-                ),
-                (
-                    "human",
-                    """
+                6. Cover every required learning checkpoint.
+                7. Ensure factual accuracy.
+                8. Follow the evaluator's feedback when provided.
+                9. Correct failed explanations instead of merely
+                   adding unrelated content.
+                10. Preserve correct explanations from the previous
+                    lesson wherever appropriate.
+                """
+            ),
+
+            (
+                "human",
+                """
                 Create a complete beginner-friendly lesson.
 
                 TOPIC:
@@ -47,7 +52,13 @@ class LessonGenerator:
                 REQUIRED LEARNING CHECKPOINTS:
                 {rubric}
 
-                Follow this lesson structure:
+                PREVIOUS LESSON:
+                {previous_lesson}
+
+                EVALUATOR FEEDBACK:
+                {feedback}
+
+                Follow this structure:
 
                 1. Introduction
                 2. What is the topic?
@@ -60,23 +71,28 @@ class LessonGenerator:
                 9. Summary
                 10. Practice questions
 
-                IMPORTANT:
+                Important:
+                - Cover every required checkpoint.
+                - Fix all issues identified by the evaluator.
+                - Explain concepts clearly.
+                - Return the complete revised lesson.
+                """
+            )
 
-                - Cover every required learning checkpoint.
-                - Explain each checkpoint clearly.
-                - Use examples wherever useful.
-                - Keep the lesson appropriate for the learner level.
-                """,
-                ),
-            ]
-        )
+        ])
 
         self.parser = StrOutputParser()
 
         self.chain = self.prompt | self.llm | self.parser
 
+
     def generate(
-        self, topic: str, level: str = "Beginner", rubric: list | None = None
+        self,
+        topic: str,
+        level: str = "Beginner",
+        rubric: list | None = None,
+        feedback: str = "",
+        previous_lesson: str = ""
     ) -> str:
 
         if not topic.strip():
@@ -85,6 +101,12 @@ class LessonGenerator:
         if not rubric:
             raise ValueError("Learning rubric cannot be empty.")
 
-        lesson = self.chain.invoke({"topic": topic, "level": level, "rubric": rubric})
+        return self.chain.invoke({
 
-        return lesson
+            "topic": topic,
+            "level": level,
+            "rubric": rubric,
+            "feedback": feedback,
+            "previous_lesson": previous_lesson
+
+        })
