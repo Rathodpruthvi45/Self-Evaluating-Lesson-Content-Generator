@@ -1,0 +1,25 @@
+
+# LLM integration
+langchain
+langchain-google-genai
+langchain-core
+
+# Agent orchestration
+langgraph
+
+# Configuration and validation
+python-dotenv
+pydantic
+
+# Backend API
+fastapi
+uvicorn
+
+# Frontend
+streamlit
+
+# Database
+sqlalchemy
+
+# Testing
+pytest
