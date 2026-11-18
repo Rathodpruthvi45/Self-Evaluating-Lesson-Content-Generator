@@ -1,7 +1,7 @@
 
 from app.graph.workflow import LessonWorkflow
 import uuid
-
+from app.evaluator.engine import SelfEvolutionEngine
 from app.database.repository import MemoryRepository
 from app.evaluator.topic_rubric import TopicRubricGenerator
 from app.evaluator.rubric import UNIVERSAL_RUBRIC

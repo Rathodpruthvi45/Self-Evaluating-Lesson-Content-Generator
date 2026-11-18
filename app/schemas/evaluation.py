@@ -16,3 +16,30 @@ class EvaluationResult(BaseModel):
     results: list[CriterionResult] = Field(
         description="Evaluation result for every rubric criterion"
     )
+
+
+
+
+
+
+class EvolutionProposal(BaseModel):
+
+    pattern_summary: str = Field(
+        description="Summary of repeated failures found in history"
+    )
+
+    target_criterion: str = Field(
+        description="The criterion that needs improvement"
+    )
+
+    proposed_guidance: str = Field(
+        description="Specific instructions to improve lesson generation"
+    )
+
+    expected_improvement: str = Field(
+        description="How the proposed guidance should improve lesson quality"
+    )
+
+    risks: str = Field(
+        description="Possible negative effects of this prompt change"
+    )

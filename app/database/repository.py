@@ -105,6 +105,23 @@ class MemoryRepository:
 
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_versions (
+
+                    version INTEGER PRIMARY KEY,
+
+                    guidance TEXT NOT NULL,
+
+                    source_patterns TEXT,
+
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+
+                    benchmark_score REAL,
+
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+                )
+            """)
 
 
     def create_run(
@@ -260,3 +277,133 @@ class MemoryRepository:
             """, (run_id,)).fetchall()
 
             return [dict(row) for row in rows]
+
+
+
+    
+    def get_failure_patterns(self, min_runs=2):
+
+        with self.get_connection() as connection:
+
+            rows = connection.execute("""
+
+                SELECT
+
+                    r.criterion,
+                    COUNT(DISTINCT r.run_id) AS run_count,
+                    COUNT(*) AS failure_count,
+
+                    GROUP_CONCAT(
+                        DISTINCT r.reason
+                    ) AS reasons,
+
+                    GROUP_CONCAT(
+                        DISTINCT l.topic
+                    ) AS topics
+
+                FROM rejection_logs r
+
+                JOIN lesson_runs l
+                    ON r.run_id = l.run_id
+
+                GROUP BY r.criterion
+
+                HAVING COUNT(DISTINCT r.run_id) >= ?
+
+                ORDER BY run_count DESC
+
+            """, (min_runs,)).fetchall()
+
+            return [dict(row) for row in rows]
+
+
+    def save_prompt_candidate(
+        self,
+        guidance,
+        source_patterns
+    ):
+
+        import json
+
+        with self.get_connection() as connection:
+
+            next_version = connection.execute("""
+
+                SELECT COALESCE(MAX(version), 0) + 1
+                FROM prompt_versions
+
+            """).fetchone()[0]
+
+            connection.execute("""
+
+                INSERT INTO prompt_versions (
+                    version,
+                    guidance,
+                    source_patterns,
+                    status
+                )
+
+                VALUES (?, ?, ?, 'PENDING')
+
+            """, (
+                next_version,
+                guidance,
+                json.dumps(source_patterns)
+            ))
+
+            return next_version
+
+
+    def get_active_prompt(self):
+
+        with self.get_connection() as connection:
+
+            row = connection.execute("""
+
+                SELECT version, guidance
+                FROM prompt_versions
+
+                WHERE status = 'APPROVED'
+
+                ORDER BY version DESC
+
+                LIMIT 1
+
+            """).fetchone()
+
+            return dict(row) if row else None
+
+
+    def update_prompt_status(
+        self,
+        version,
+        status,
+        benchmark_score=None
+    ):
+
+        allowed_statuses = {
+            "PENDING",
+            "APPROVED",
+            "REJECTED"
+        }
+
+        if status not in allowed_statuses:
+            raise ValueError("Invalid prompt status.")
+
+        with self.get_connection() as connection:
+
+            connection.execute("""
+
+                UPDATE prompt_versions
+
+                SET status = ?,
+                    benchmark_score = ?
+
+                WHERE version = ?
+
+            """, (
+                status,
+                benchmark_score,
+                version
+            ))
+
